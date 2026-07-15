@@ -58,6 +58,9 @@ set(EXTRA_FILES
 
 
 find_package(MiniFlowVR QUIET)
+if(NOT TARGET Sofa.Framework)
+    find_package(Sofa.Framework REQUIRED)
+endif()
 sofa_find_package(Sofa.Core REQUIRED)
 sofa_find_package(Sofa.Component.Collision REQUIRED)
 sofa_find_package(Sofa.GL QUIET)
