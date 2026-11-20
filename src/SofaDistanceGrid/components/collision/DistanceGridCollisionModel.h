@@ -70,6 +70,7 @@ public:
     const type::Matrix3& getRotation();
     const type::Vec3& getTranslation();
     bool isFlipped();
+    SReal getAlarmDistance();
 
     /// @name Previous state data
     /// Used to estimate velocity in case the distance grid itself is dynamic
@@ -135,6 +136,7 @@ public:
 
     Data< bool > usePoints; ///< use mesh vertices for collision detection
     Data< bool > flipNormals; ///< reverse surface direction, i.e. points are considered in collision if they move outside of the object instead of inside
+    Data< SReal > alarmDistance; ///< points are detected this much further than the contact distance (DiscreteIntersection has none), contacts keep the contact distance
     Data< bool > showMeshPoints; ///< Enable rendering of mesh points
     Data< bool > showGridPoints; ///< Enable rendering of grid points
     Data< double > showMinDist; ///< Min distance to render gradients
@@ -241,6 +243,7 @@ inline bool RigidDistanceGridCollisionElement::isTransformed() { return model->i
 inline const type::Matrix3& RigidDistanceGridCollisionElement::getRotation() { return model->getRotation(index); }
 inline const type::Vec3& RigidDistanceGridCollisionElement::getTranslation() { return model->getTranslation(index); }
 inline bool RigidDistanceGridCollisionElement::isFlipped() { return model->isFlipped(); }
+inline SReal RigidDistanceGridCollisionElement::getAlarmDistance() { return model->alarmDistance.getValue(); }
 
 inline std::shared_ptr<DistanceGrid> RigidDistanceGridCollisionElement::getPrevGrid() { return model->getPrevGrid(index); }
 inline const type::Matrix3& RigidDistanceGridCollisionElement::getPrevRotation() { return model->getPrevRotation(index); }

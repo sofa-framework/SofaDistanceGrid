@@ -28,6 +28,7 @@ using sofa::core::collision::Contact ;
 #include <sofa/component/collision/geometry/SphereCollisionModel.h>
 #include <sofa/component/collision/geometry/PointCollisionModel.h>
 #include <sofa/component/collision/geometry/TriangleCollisionModel.h>
+#include <sofa/component/collision/geometry/LineCollisionModel.h>
 
 #include <sofa/component/collision/response/mapper/RigidContactMapper.inl>
 #include <sofa/component/collision/response/mapper/BarycentricContactMapper.inl>
@@ -76,6 +77,7 @@ Creator<Contact::Factory, FrictionContact<RigidDistanceGridCollisionModel, Rigid
 Creator<Contact::Factory, FrictionContact<RigidDistanceGridCollisionModel, PointCollisionModel<sofa::defaulttype::Vec3Types>> > DistanceGridPointFrictionContactClass("FrictionContactConstraint", true);
 Creator<Contact::Factory, FrictionContact<RigidDistanceGridCollisionModel, SphereCollisionModel<sofa::defaulttype::Vec3Types>> > DistanceGridSphereFrictionContactClass("FrictionContactConstraint", true);
 Creator<Contact::Factory, FrictionContact<RigidDistanceGridCollisionModel, TriangleCollisionModel<sofa::defaulttype::Vec3Types>> > DistanceGridTriangleFrictionContactClass("FrictionContactConstraint", true);
+Creator<Contact::Factory, FrictionContact<RigidDistanceGridCollisionModel, LineCollisionModel<sofa::defaulttype::Vec3Types>> > DistanceGridLineFrictionContactClass("FrictionContactConstraint", true);
 
 Creator<Contact::Factory, FrictionContact<FFDDistanceGridCollisionModel, FFDDistanceGridCollisionModel> > FFDDistanceGridFrictionContactClass("FrictionContactConstraint", true);
 Creator<Contact::Factory, FrictionContact<FFDDistanceGridCollisionModel, RigidDistanceGridCollisionModel> > FFDDistanceGridRigidDistanceGridFrictionContactClass("FrictionContactConstraint", true);

@@ -19,6 +19,7 @@
 *                                                                             *
 * Contact information: contact@sofa-framework.org                             *
 ******************************************************************************/
+#include <limits>
 #include <iostream>
 #include <algorithm>
 
@@ -563,7 +564,7 @@ int RigidDistanceGridDiscreteIntersection::computeIntersection(RigidDistanceGrid
     const bool flipped = e1.isFlipped();
 
     const double d0 = e1.getContactDistance() + e2.getContactDistance() + intersection->getContactDistance();
-    const SReal margin = 0.001f + (SReal)d0;
+    const SReal margin = 0.001f + (SReal)d0 + e1.getAlarmDistance();
 
 
     type::Vec3 p2 = e2.p();
@@ -728,61 +729,63 @@ bool RigidDistanceGridDiscreteIntersection::testIntersection(RigidDistanceGridCo
 
 int RigidDistanceGridDiscreteIntersection::computeIntersection(RigidDistanceGridCollisionElement& e1, Line& e2, OutputVector* contacts, const core::collision::Intersection* intersection)
 {
-    const int f2 = e2.flags();
-    if (!(f2&LineCollisionModel<sofa::defaulttype::Vec3Types>::FLAG_POINTS)) return 0; // no points associated with this line
+    // One contact at the segment's deepest interior point, when it lies deeper in the grid than both of its ends: a
+    // segment cutting across a wall between two collision points. The endpoints are NOT tested here: use this together
+    // with a PointCollisionModel on the same mechanical state.
     const std::shared_ptr<DistanceGrid> grid1 = e1.getGrid();
     const bool useXForm = e1.isTransformed();
     const type::Vec3& t1 = e1.getTranslation();
     const Matrix3& r1 = e1.getRotation();
+    const bool flipped = e1.isFlipped();
 
     const double d0 = e1.getContactDistance() + e2.getContactDistance() + intersection->getContactDistance();
-    const SReal margin = 0.001f + (SReal)d0;
-    int nresult = 0;
-    for (unsigned int iP = 0; iP < 2; ++iP)
+    const SReal margin = 0.001f + (SReal)d0 + e1.getAlarmDistance();
+
+    const type::Vec3 a2 = e2.p(0), b2 = e2.p(1);
+    const DistanceGrid::Coord a1 = useXForm ? DistanceGrid::Coord(r1.multTranspose(a2-t1)) : DistanceGrid::Coord(a2);
+    const DistanceGrid::Coord b1 = useXForm ? DistanceGrid::Coord(r1.multTranspose(b2-t1)) : DistanceGrid::Coord(b2);
+    if (!grid1->inGrid(a1) || !grid1->inGrid(b1)) return 0;  // the grid is convex (a box): the whole segment is in
+    const auto value = [&](SReal t) { const SReal d = grid1->interp(a1 + (b1-a1)*t); return flipped ? -d : d; };
+
+    const SReal da = value(0), db = value(1);
+    // Samples a cell apart, then a golden-section search between the neighbours of the deepest one.
+    const SReal cell = std::min({grid1->getCellWidth()[0], grid1->getCellWidth()[1], grid1->getCellWidth()[2]});
+    const int n = std::max(2, (int)std::ceil((b1-a1).norm() / cell));
+    int k = 0;
+    SReal dk = std::numeric_limits<SReal>::max();
+    for (int i = 1; i < n; ++i)
     {
-        if (!(f2&(LineCollisionModel<sofa::defaulttype::Vec3Types>::FLAG_P1 << iP))) continue;
-
-        type::Vec3 p2 = e2.p(iP);
-        DistanceGrid::Coord p1;
-
-        if (useXForm)
-        {
-            p1 = r1.multTranspose(p2-t1);
-        }
-        else p1 = p2;
-
-        if (grid1->inBBox( p1, margin ))
-        {
-            if (!grid1->inGrid( p1 ))
-            {
-                msg_error(intersection) << "Margin less than "<<margin<<" in DistanceGrid "<<e1.getCollisionModel()->getName();
-            }
-            else
-            {
-                SReal d = grid1->interp(p1);
-                if (d >= margin) continue;
-
-                type::Vec3 grad = grid1->grad(p1); // note that there are some redundant computations between interp() and grad()
-                grad.normalize();
-
-                //p1 -= grad * d; // push p1 back to the surface
-
-                contacts->resize(contacts->size()+1);
-                DetectionOutput *detection = &*(contacts->end()-1);
-
-                detection->point[0] = type::Vec3(p1) - grad * d;
-                detection->point[1] = type::Vec3(p2);
-                detection->normal = (useXForm) ? r1 * grad : grad; // normal in global space from p1's surface
-                detection->value = d - d0;
-                detection->elem.first = e1;
-                detection->elem.second = e2;
-                detection->id = e2.getIndex()*2+iP;
-                ++nresult;
-            }
-        }
+        const SReal d = value((SReal)i / n);
+        if (d < dk) { dk = d; k = i; }
     }
+    if (k == 0) return 0;
+    SReal lo = (SReal)(k-1) / n, hi = (SReal)(k+1) / n;
+    const SReal g = 0.6180339887;
+    SReal x1 = hi - g*(hi-lo), x2 = lo + g*(hi-lo), f1 = value(x1), f2 = value(x2);
+    for (int it = 0; it < 12; ++it)
+    {
+        if (f1 < f2) { hi = x2; x2 = x1; f2 = f1; x1 = hi - g*(hi-lo); f1 = value(x1); }
+        else { lo = x1; x1 = x2; f1 = f2; x2 = lo + g*(hi-lo); f2 = value(x2); }
+    }
+    const SReal t = (f1 < f2) ? x1 : x2;
+    const SReal d = std::min(f1, f2);
+    if (d >= margin || d >= std::min(da, db) - 0.01*cell || t <= 0 || t >= 1) return 0;
 
-    return nresult;
+    const DistanceGrid::Coord p1 = a1 + (b1-a1)*t;
+    type::Vec3 grad = grid1->grad(p1);
+    if (flipped) grad = -grad;
+    grad.normalize();
+
+    contacts->resize(contacts->size()+1);
+    DetectionOutput *detection = &*(contacts->end()-1);
+    detection->point[0] = type::Vec3(p1) - grad * d;
+    detection->point[1] = a2 + (b2-a2)*t;
+    detection->normal = (useXForm) ? r1 * grad : grad; // normal in global space from p1's surface
+    detection->value = d - d0;
+    detection->elem.first = e1;
+    detection->elem.second = e2;
+    detection->id = e2.getIndex();
+    return 1;
 }
 
 bool RigidDistanceGridDiscreteIntersection::testIntersection(Ray& /*e2*/, RigidDistanceGridCollisionElement& /*e1*/, const core::collision::Intersection*)
